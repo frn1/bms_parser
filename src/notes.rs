@@ -32,7 +32,9 @@ pub struct BmsNote {
     pub note_type: BmsNoteType,
 }
 
-pub fn generate_notes(chart: BmsChart) -> Vec<BmsNote> {
+// TODO: Clean up
+/// Generates a ```Vec``` of ```BmsNote``` out of a ```BmsChart```
+pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
     const RANGES: [RangeInclusive<u16>; 8] = [
         // Comments will show range in base 36 for clarity
         37..=71,   // 1P Visible: 11..=1Z
@@ -125,7 +127,7 @@ pub fn generate_notes(chart: BmsChart) -> Vec<BmsNote> {
                     }
                 }
             }
-            BmsNoteType::Hidden { keysound } => {
+            BmsNoteType::Hidden { keysound: _ } => {
                 if RANGES[2].contains(&object.channel) {
                     lane = object.channel - RANGES[2].start();
                 } else if RANGES[3].contains(&object.channel) {
@@ -160,7 +162,6 @@ pub fn generate_notes(chart: BmsChart) -> Vec<BmsNote> {
                     lane = object.channel - RANGES[7].start();
                 }
             }
-            _ => {}
         }
 
         notes.push(BmsNote {

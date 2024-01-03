@@ -37,6 +37,7 @@ pub struct BmsTiming {
     pub scroll_changes: HashMap<BmsTime, f64>,
 }
 
+// TODO: Name this function better
 fn regex_header_thing<T: num_traits::Num + Eq + Hash, J: std::str::FromStr>(
     headers: &HashMap<UniCase<String>, String>,
     regex: &Regex,
@@ -61,6 +62,7 @@ fn regex_header_thing<T: num_traits::Num + Eq + Hash, J: std::str::FromStr>(
     Some(out)
 }
 
+// TODO: Clean up
 pub fn generate_timings(chart: &BmsChart) -> Option<BmsTiming> {
     let bpm_regex = Regex::new(r"^bpm(\d{2})$").unwrap();
     let bpm_ids: HashMap<u16, f64> = match regex_header_thing(&chart.headers, &bpm_regex) {

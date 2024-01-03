@@ -9,7 +9,6 @@ edition = "2021"
 num = "0.4.1"
 num-traits = "0.2.17"
 ordered-float = "4.2.0"
-rand = "0.8.5"
 regex = "1.10.2"
 strum = { version = "0.25.0", features = ["derive"] }
 unicase = "2.7.0"

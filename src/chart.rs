@@ -42,15 +42,31 @@ pub struct BmsChart {
     pub time_signatures: HashMap<u16, f64>,
 }
 
+// TODO: Clean up
 impl BmsChart {
+    /// Updates/fixes the objects in the chart and ensures
+    /// a good state for the ```objects``` property
+    /// 
+    /// Although sometimes unecessary, this function 
+    /// should be called right after you finish messing 
+    /// around with the objects.
+    /// 
+    /// Nothing really break if you don't, but objects
+    /// shouldn't have the same time unless their
+    /// channel is BGM (01)
     pub fn update_objects(&mut self) {
+        // Sort them
         self.objects.sort();
         // Remove all duplicates except if they are in a BGM channel (01)
         self.objects
             .dedup_by(|a, b| a == b && a.channel != 1 && b.channel != 1);
     }
 
-    pub fn compile(data: &str, rng: fn(u32) -> u32) -> Option<BmsChart> {
+    /// Compiles a ```BmsChart``` from a ```&str```.
+    /// 
+    /// The **inclusive** range of values returned by the rng function
+    /// should be between 1 and ```max_value``` (AKA ```1..=max_value```)
+    pub fn compile(data: &str, rng: fn(max_value: u32) -> u32) -> Option<BmsChart> {
         // Anything that's related to the flow of the chart
         #[derive(EnumIter, FromRepr, Debug)]
         enum BmsControlMatches {
