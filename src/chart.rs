@@ -62,10 +62,20 @@ impl BmsChart {
             .dedup_by(|a, b| a == b && a.channel != 1 && b.channel != 1);
     }
 
+
     /// Compiles a ```BmsChart``` from a ```&str```.
     /// 
     /// The **inclusive** range of values returned by the rng function
     /// should be between 1 and ```max_value``` (AKA ```1..=max_value```)
+    /// 
+    /// If you can't use a random number generator for whatever reason,
+    /// then a simple function like this would work as a placeholder:
+    /// 
+    /// ```rust
+    /// fn bms_rng(max: u32) -> u32 {
+    ///     max
+    /// }
+    /// ```
     pub fn compile(data: &str, rng: fn(max_value: u32) -> u32) -> Option<BmsChart> {
         // Anything that's related to the flow of the chart
         #[derive(EnumIter, FromRepr, Debug)]

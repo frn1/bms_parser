@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, vec, f64::NAN};
+use std::{f64::NAN, ops::RangeInclusive, vec};
 
 use ordered_float::OrderedFloat;
 use unicase::UniCase;
@@ -10,19 +10,11 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub enum BmsNoteType {
-    Normal {
-        keysound: u16,
-    },
-    Hidden {
-        keysound: u16,
-    },
-    Long {
-        keysound: u16,
-        end_time: BmsTime,
-    },
-    Mine {
-        damage: u16,
-    },
+    Normal { keysound: u16 },
+    Hidden { keysound: u16 },
+    Long { keysound: u16, end_time: BmsTime },
+    Mine { damage: u16 },
+    BGM { keysound: u16 },
 }
 
 #[derive(Debug)]
@@ -35,8 +27,9 @@ pub struct BmsNote {
 // TODO: Clean up
 /// Generates a ```Vec``` of ```BmsNote``` out of a ```BmsChart```
 pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
-    const RANGES: [RangeInclusive<u16>; 8] = [
+    const RANGES: [RangeInclusive<u16>; 9] = [
         // Comments will show range in base 36 for clarity
+        01..=01,   // BGM: 01
         37..=71,   // 1P Visible: 11..=1Z
         73..=107,  // 2P Visible: 21..=2Z
         109..=143, // 1P Invisible: 31..=3Z
@@ -82,17 +75,23 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
             let range = &RANGES[j];
             if range.contains(&object.channel) {
                 note_type = match j {
-                    0 | 1 => BmsNoteType::Normal {
+                    0 => BmsNoteType::BGM {
                         keysound: object.value,
                     },
-                    2 | 3 => BmsNoteType::Hidden {
+                    1 | 2 => BmsNoteType::Normal {
                         keysound: object.value,
                     },
-                    4 | 5 => BmsNoteType::Long {
+                    3 | 4 => BmsNoteType::Hidden {
                         keysound: object.value,
-                        end_time: BmsTime { measure: 0, fraction: OrderedFloat(NAN) },
                     },
-                    6 | 7 => BmsNoteType::Mine {
+                    5 | 6 => BmsNoteType::Long {
+                        keysound: object.value,
+                        end_time: BmsTime {
+                            measure: 0,
+                            fraction: OrderedFloat(NAN),
+                        },
+                    },
+                    7 | 8 => BmsNoteType::Mine {
                         damage: object.value / 2, // BMS CMD MEMO says to this idk...
                     },
                     _ => unreachable!(),
@@ -162,6 +161,7 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
                     lane = object.channel - RANGES[7].start();
                 }
             }
+            _ => {}
         }
 
         notes.push(BmsNote {
