@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 
 use num::BigUint;
 use ordered_float::OrderedFloat;
@@ -15,16 +15,35 @@ pub struct BmsTime {
     pub fraction: OrderedFloat<f64>,
 }
 
-impl Sub for BmsTime {
-    fn sub(self, rhs: Self) -> Self::Output {
+impl BmsTime {
+    pub fn new_ordered(measure: u16, fraction: OrderedFloat<f64>) -> Self {
         let mut output = BmsTime {
-            measure: self.measure - rhs.measure,
-            fraction: self.fraction - rhs.fraction,
+            measure,
+            fraction: fraction,
         };
         output.measure = (output.measure as i16 + output.fraction.floor() as i16) as u16;
         output.fraction %= 1.0;
         output.fraction = OrderedFloat(output.fraction.abs());
         output
+    }
+    
+    pub fn new(measure: u16, fraction: f64) -> Self {
+        Self::new_ordered(measure, OrderedFloat(fraction))
+    }
+    
+}
+
+impl Sub for BmsTime {
+    fn sub(self, rhs: Self) -> Self::Output {
+        BmsTime::new_ordered(self.measure - rhs.measure, self.fraction - rhs.fraction)
+    }
+
+    type Output = BmsTime;
+}
+
+impl Add for BmsTime {
+    fn add(self, rhs: Self) -> Self::Output {
+        BmsTime::new_ordered(self.measure + rhs.measure, self.fraction + rhs.fraction)
     }
 
     type Output = BmsTime;
