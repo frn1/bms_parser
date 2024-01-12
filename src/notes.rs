@@ -1,32 +1,29 @@
-use std::{f64::NAN, ops::RangeInclusive, vec};
+use std::{f64::NAN, ops::RangeInclusive, vec, collections::VecDeque};
 
 use ordered_float::OrderedFloat;
 use unicase::UniCase;
 
-use crate::{
-    chart::{BmsChart, BmsObject},
-    timing::BmsTime,
-};
+use crate::chart::{BmsChart, BmsObject};
 
 #[derive(Debug, PartialEq)]
 pub enum BmsNoteType {
     Normal { keysound: u16 },
     Hidden { keysound: u16 },
-    Long { keysound: u16, end_time: BmsTime },
+    Long { keysound: u16, end_time: u64 },
     Mine { damage: u16 },
     BGM { keysound: u16 },
 }
 
 #[derive(Debug)]
 pub struct BmsNote {
-    pub hit_time: BmsTime,
+    pub tick: u64,
     pub lane: u16,
     pub note_type: BmsNoteType,
 }
 
 // TODO: Clean up
 /// Generates a ```Vec``` of ```BmsNote``` out of a ```BmsChart```
-pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
+pub fn generate_notes(chart: &BmsChart) -> VecDeque<BmsNote> {
     const RANGES: [RangeInclusive<u16>; 9] = [
         // Comments will show range in base 36 for clarity
         01..=01,   // BGM: 01
@@ -86,13 +83,10 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
                     },
                     5 | 6 => BmsNoteType::Long {
                         keysound: object.value,
-                        end_time: BmsTime {
-                            measure: 0,
-                            fraction: OrderedFloat(NAN),
-                        },
+                        end_time: 0,
                     },
                     7 | 8 => BmsNoteType::Mine {
-                        damage: object.value / 2, // BMS CMD MEMO says to this idk...
+                        damage: object.value / 2, // BMS Command Memo says to do this but idk ¯\_(ツ)_/¯
                     },
                     _ => unreachable!(),
                 };
@@ -117,11 +111,11 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
                 {
                     let lnobj = *lnobj.as_ref().unwrap();
                     if let Some(next_idx) = objects.iter().position(|e| {
-                        e.channel == object.channel && e.value == lnobj && e.time > object.time
+                        e.channel == object.channel && e.value == lnobj && e.tick > object.tick
                     }) {
                         note_type = BmsNoteType::Long {
                             keysound,
-                            end_time: objects[next_idx].time,
+                            end_time: objects[next_idx].tick,
                         };
                     }
                 }
@@ -143,12 +137,12 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
                     lane = object.channel - RANGES[5].start();
                 }
                 if let Some(next_idx) = objects.iter().position(|e| {
-                    e.channel == object.channel && e.value == object.value && e.time > object.time
+                    e.channel == object.channel && e.value == object.value && e.tick > object.tick
                 }) {
                     let next = objects[next_idx];
                     note_type = BmsNoteType::Long {
                         keysound,
-                        end_time: next.time,
+                        end_time: next.tick,
                     };
                 } else {
                     continue;
@@ -165,11 +159,11 @@ pub fn generate_notes(chart: &BmsChart) -> Vec<BmsNote> {
         }
 
         notes.push(BmsNote {
-            hit_time: object.time,
+            tick: object.tick,
             lane,
             note_type,
         });
     }
 
-    notes
+    VecDeque::from(notes)
 }
