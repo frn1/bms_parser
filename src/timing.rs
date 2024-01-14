@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::{Add, Sub};
 
-use num::BigUint;
-use ordered_float::OrderedFloat;
 use regex::Regex;
 use unicase::UniCase;
 
@@ -97,7 +94,7 @@ pub fn generate_timings(chart: &BmsChart) -> Option<BmsTiming> {
         .map(|object| {
             (
                 object.tick,
-                (*stop_ids.get(&object.value).unwrap() * chart.resolution as u64) / (192 * 4),
+                (*stop_ids.get(&object.value).unwrap() * chart.resolution as u64 * 4) / 192,
             )
         })
         .collect();

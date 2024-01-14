@@ -1,11 +1,10 @@
-use std::{f64::NAN, ops::RangeInclusive, vec, collections::VecDeque};
+use std::{ops::RangeInclusive, vec, collections::VecDeque};
 
-use ordered_float::OrderedFloat;
 use unicase::UniCase;
 
 use crate::chart::{BmsChart, BmsObject};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BmsNoteType {
     Normal { keysound: u16 },
     Hidden { keysound: u16 },
@@ -14,7 +13,7 @@ pub enum BmsNoteType {
     BGM { keysound: u16 },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct BmsNote {
     pub tick: u64,
     pub lane: u16,

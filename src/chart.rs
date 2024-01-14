@@ -1,8 +1,7 @@
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
-use ordered_float::OrderedFloat;
+use num::Integer;
 use regex::Regex;
-use strum::{EnumIter, FromRepr, IntoEnumIterator};
 use unicase::UniCase;
 
 #[derive(Eq, Hash, Debug, Clone, Copy, Ord)]
@@ -74,11 +73,7 @@ impl BmsChart {
     ///     max
     /// }
     /// ```
-    pub fn compile(
-        data: &str,
-        resolution: u32,
-        rng: fn(max_value: u32) -> u32,
-    ) -> Result<BmsChart, &str> {
+    pub fn compile(data: &str, rng: fn(max_value: u32) -> u32) -> Result<BmsChart, &str> {
         let random_regex: Regex = Regex::new(r"^#RANDOM\s+(\d+)$").unwrap();
         let endrandom_regex: Regex = Regex::new(r"^#ENDRANDOM$").unwrap();
         let if_regex: Regex = Regex::new(r"^#IF\s+(\d+)$").unwrap();
@@ -89,7 +84,7 @@ impl BmsChart {
         let header_regex: Regex = Regex::new(r"^#(\w+)(?:\s+(\S.*))?$").unwrap();
 
         let mut chart = BmsChart {
-            resolution,
+            resolution: 1,
             headers: HashMap::new(),
             objects: vec![],
             barlines: vec![],
@@ -164,6 +159,7 @@ impl BmsChart {
                     let values_str = &captures[3];
                     // Values come in pairs so we divide by 2 to get the divisions in the measure
                     let num_values = values_str.len() / 2;
+                    chart.resolution = chart.resolution.lcm((num_values as u32).borrow()); // Update resolution to the best value
                     for i in 0..num_values {
                         let text = &values_str[i * 2..=i * 2 + 1];
                         let value = match u16::from_str_radix(text, {
@@ -178,14 +174,8 @@ impl BmsChart {
                             Err(_) => return Err("Couldn't parse object value"),
                         };
                         if value != 0 {
-                            let object = (
-                                channel,
-                                BmsTime {
-                                    measure,
-                                    fraction: (1.0 / num_values as f64) * i as f64,
-                                },
-                                value,
-                            );
+                            let fraction = (1.0 / num_values as f64) * i as f64;
+                            let object = (channel, BmsTime { measure, fraction }, value);
                             objects.push(object);
                         }
                     }
@@ -208,7 +198,7 @@ impl BmsChart {
                 chart.barlines.push(ticks);
                 let quarter_notes_per_measure = time_signatures.get(&measure).unwrap_or(&1.0) * 4.0;
                 let ticks_in_measure =
-                    (quarter_notes_per_measure * resolution as f64).round() as u64;
+                    (quarter_notes_per_measure * chart.resolution as f64).round() as u64;
                 while let Some(object) = objects.last() {
                     if object.1.measure != measure {
                         break;
