@@ -73,7 +73,11 @@ impl BmsChart {
     ///     max
     /// }
     /// ```
-    pub fn compile(data: &str, rng: fn(max_value: u32) -> u32) -> Result<BmsChart, &str> {
+    pub fn compile(
+        data: &str,
+        max_resolution: u32,
+        rng: fn(max_value: u32) -> u32,
+    ) -> Result<BmsChart, &str> {
         let random_regex: Regex = Regex::new(r"^#RANDOM\s+(\d+)$").unwrap();
         let endrandom_regex: Regex = Regex::new(r"^#ENDRANDOM$").unwrap();
         let if_regex: Regex = Regex::new(r"^#IF\s+(\d+)$").unwrap();
@@ -159,7 +163,10 @@ impl BmsChart {
                     let values_str = &captures[3];
                     // Values come in pairs so we divide by 2 to get the divisions in the measure
                     let num_values = values_str.len() / 2;
-                    chart.resolution = chart.resolution.lcm((num_values as u32).borrow()); // Update resolution to the best value
+                    chart.resolution = chart
+                        .resolution
+                        .lcm((num_values as u32).borrow())
+                        .min(max_resolution); // Update resolution to the best value
                     for i in 0..num_values {
                         let text = &values_str[i * 2..=i * 2 + 1];
                         let value = match u16::from_str_radix(text, {
