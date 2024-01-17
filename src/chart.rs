@@ -65,6 +65,13 @@ impl BmsChart {
     /// The **inclusive** range of values returned by the rng function
     /// should be between 1 and ```max_value``` (AKA ```1..=max_value```)
     ///
+    /// ```max_resolution``` is the maximum resolution the chart will use.
+    /// 
+    /// I recommend for this to be kept between 240 and 960, but feel
+    /// free to set this to u32::MAX if you really need it. This exists
+    /// because some charts (Like Random from BOFXVII) have a really 
+    /// high resolution and there is basically no difference in making this higher.
+    /// 
     /// If you can't use a random number generator for whatever reason,
     /// then a simple function like this would work as a placeholder:
     ///

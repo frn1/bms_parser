@@ -9,7 +9,7 @@ use super::chart::BmsChart;
 #[derive(PartialEq, Debug, Clone)]
 pub struct BmsTiming {
     pub bpm_changes: HashMap<u64, f64>,
-    pub stops: HashMap<u64, u64>,
+    pub stops: HashMap<u64, u32>,
     pub scroll_changes: HashMap<u64, f64>,
 }
 
@@ -47,7 +47,7 @@ pub fn generate_timings(chart: &BmsChart) -> Option<BmsTiming> {
     };
 
     let stop_regex = Regex::new(r"^stop(\d{2})$").unwrap();
-    let stop_ids: HashMap<u16, u64> = match regex_header_thing(&chart.headers, &stop_regex) {
+    let stop_ids: HashMap<u16, u32> = match regex_header_thing(&chart.headers, &stop_regex) {
         Some(v) => v,
         None => return None,
     };
@@ -87,14 +87,14 @@ pub fn generate_timings(chart: &BmsChart) -> Option<BmsTiming> {
     }
 
     // FIXME: FIX STOPS!!!!!!!!!!!!!!!!!!!!! Idk what to do
-    let stops: HashMap<u64, u64> = chart
+    let stops: HashMap<u64, u32> = chart
         .objects
         .iter()
         .filter(|object| object.channel == 9 && stop_ids.contains_key(&object.value))
         .map(|object| {
             (
                 object.tick,
-                (*stop_ids.get(&object.value).unwrap() * chart.resolution as u64 * 4) / 192,
+                (*stop_ids.get(&object.value).unwrap() * chart.resolution * 4) / 192,
             )
         })
         .collect();
