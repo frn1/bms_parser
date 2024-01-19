@@ -82,7 +82,7 @@ impl BmsNotes {
             .headers
             .get(&UniCase::from("LNOBJ"))
             .unwrap_or(&invalid_lnobj_string);
-        let lnobj = u16::from_str_radix(lnobj_string, 16);
+        let lnobj = u16::from_str_radix(lnobj_string, 36);
 
         let mut notes: Vec<BmsNote> = vec![];
         for i in 0..objects.len() {
@@ -143,7 +143,7 @@ impl BmsNotes {
                             - RANGES[1].start()
                             + RANGES[0].len() as u16;
                     }
-                    if i < objects.len() - 1
+                    if i < objects.len()
                         && lnobj.as_ref().is_ok()
                         && object.value
                             != *lnobj.as_ref().unwrap()
