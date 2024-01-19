@@ -7,7 +7,7 @@ use unicase::UniCase;
 #[derive(Eq, Hash, Debug, Clone, Copy, Ord)]
 pub struct BmsObject {
     pub channel: u16,
-    pub tick: u64,
+    pub tick: u32,
     pub value: u16,
 }
 
@@ -37,7 +37,7 @@ pub struct BmsChart {
     pub resolution: u32, // Ticks per quarter note
     pub headers: HashMap<UniCase<String>, String>,
     pub objects: Vec<BmsObject>,
-    pub barlines: Vec<u64>,
+    pub barlines: Vec<u32>,
 }
 
 // TODO: Clean up
@@ -66,12 +66,12 @@ impl BmsChart {
     /// should be between 1 and ```max_value``` (AKA ```1..=max_value```)
     ///
     /// ```max_resolution``` is the maximum resolution the chart will use.
-    /// 
+    ///
     /// I recommend for this to be kept between 240 and 960, but feel
     /// free to set this to u32::MAX if you really need it. This exists
-    /// because some charts (Like Random from BOFXVII) have a really 
+    /// because some charts (Like Random from BOFXVII) have a really
     /// high resolution and there is basically no difference in making this higher.
-    /// 
+    ///
     /// If you can't use a random number generator for whatever reason,
     /// then a simple function like this would work as a placeholder:
     ///
@@ -207,17 +207,17 @@ impl BmsChart {
             objects.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
             objects.reverse();
             let end_bms_time = &objects.first().unwrap().1;
-            let mut ticks = 0;
+            let mut ticks: u32 = 0;
             for measure in 0..=end_bms_time.measure {
                 chart.barlines.push(ticks);
                 let quarter_notes_per_measure = time_signatures.get(&measure).unwrap_or(&1.0) * 4.0;
                 let ticks_in_measure =
-                    (quarter_notes_per_measure * chart.resolution as f64).round() as u64;
+                    (quarter_notes_per_measure * chart.resolution as f64).round() as u32;
                 while let Some(object) = objects.last() {
                     if object.1.measure != measure {
                         break;
                     }
-                    let tick = (object.1.fraction * ticks_in_measure as f64).round() as u64 + ticks;
+                    let tick = (object.1.fraction * ticks_in_measure as f64).round() as u32 + ticks;
                     chart.objects.push(BmsObject {
                         channel: object.0,
                         tick,
@@ -232,5 +232,23 @@ impl BmsChart {
 
         chart.update_objects();
         Ok(chart)
+    }
+
+    pub fn extract_keysounds(&self) -> HashMap<u16, String> {
+        let mut keysounds = HashMap::new();
+        let keysound_regex = Regex::new(r"^wav(\S\S)$").unwrap();
+        for key in self.headers.keys() {
+            let lowercase_key = key.to_lowercase();
+            let captures = match keysound_regex.captures(&lowercase_key) {
+                Some(v) => v,
+                None => continue,
+            };
+            let id = match u16::from_str_radix(&captures[1], 36) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            keysounds.insert(id, self.headers[key].clone());
+        }
+        keysounds
     }
 }

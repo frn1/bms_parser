@@ -8,9 +8,9 @@ use super::chart::BmsChart;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct BmsTiming {
-    pub bpm_changes: HashMap<u64, f64>,
-    pub stops: HashMap<u64, u32>,
-    pub scroll_changes: HashMap<u64, f64>,
+    pub bpm_changes: HashMap<u32, f64>,
+    pub stops: HashMap<u32, u32>,
+    pub scroll_changes: HashMap<u32, f64>,
 }
 
 // TODO: Name this function better
@@ -38,78 +38,81 @@ fn regex_header_thing<T: num_traits::Num + Eq + Hash, J: std::str::FromStr>(
     Some(out)
 }
 
-// TODO: Clean up
-pub fn generate_timings(chart: &BmsChart) -> Option<BmsTiming> {
-    let bpm_regex = Regex::new(r"^bpm(\d{2})$").unwrap();
-    let bpm_ids: HashMap<u16, f64> = match regex_header_thing(&chart.headers, &bpm_regex) {
-        Some(v) => v,
-        None => return None,
-    };
+impl BmsTiming {
+    // TODO: Clean up
+    pub fn generate(chart: &BmsChart) -> Option<BmsTiming> {
+        let bpm_regex = Regex::new(r"^bpm(\d{2})$").unwrap();
+        let bpm_ids: HashMap<u16, f64> = match regex_header_thing(&chart.headers, &bpm_regex) {
+            Some(v) => v,
+            None => return None,
+        };
 
-    let stop_regex = Regex::new(r"^stop(\d{2})$").unwrap();
-    let stop_ids: HashMap<u16, u32> = match regex_header_thing(&chart.headers, &stop_regex) {
-        Some(v) => v,
-        None => return None,
-    };
+        let stop_regex = Regex::new(r"^stop(\d{2})$").unwrap();
+        let stop_ids: HashMap<u16, u32> = match regex_header_thing(&chart.headers, &stop_regex) {
+            Some(v) => v,
+            None => return None,
+        };
 
-    let scroll_regex = Regex::new(r"^scroll(\d{2})$").unwrap();
-    let scroll_ids: HashMap<u16, f64> = match regex_header_thing(&chart.headers, &scroll_regex) {
-        Some(v) => v,
-        None => return None,
-    };
+        let scroll_regex = Regex::new(r"^scroll(\d{2})$").unwrap();
+        let scroll_ids: HashMap<u16, f64> = match regex_header_thing(&chart.headers, &scroll_regex)
+        {
+            Some(v) => v,
+            None => return None,
+        };
 
-    let mut bpm_changes: HashMap<u64, f64> = chart
-        .objects
-        .iter()
-        .filter(|object| {
-            object.channel == 3 || (object.channel == 8 && bpm_ids.contains_key(&object.value))
-        })
-        .map(|object| match object.channel {
-            3 => (object.tick, object.value as f64),
-            8 => (object.tick, *bpm_ids.get(&object.value).unwrap()),
-            _ => unreachable!(),
-        })
-        .collect();
+        let mut bpm_changes: HashMap<u32, f64> = chart
+            .objects
+            .iter()
+            .filter(|object| {
+                object.channel == 3 || (object.channel == 8 && bpm_ids.contains_key(&object.value))
+            })
+            .map(|object| match object.channel {
+                3 => (object.tick, object.value as f64),
+                8 => (object.tick, *bpm_ids.get(&object.value).unwrap()),
+                _ => unreachable!(),
+            })
+            .collect();
 
-    let start = 0;
+        let start = 0;
 
-    if bpm_changes.contains_key(&start) == false {
-        bpm_changes.insert(
-            start,
-            match chart.headers.get(&UniCase::new("BPM".to_string())) {
-                Some(v) => match v.parse() {
-                    Ok(v) => v,
-                    Err(_) => return None,
+        if bpm_changes.contains_key(&start) == false {
+            bpm_changes.insert(
+                start,
+                match chart.headers.get(&UniCase::new("BPM".to_string())) {
+                    Some(v) => match v.parse() {
+                        Ok(v) => v,
+                        Err(_) => return None,
+                    },
+                    None => return None,
                 },
-                None => return None,
-            },
-        );
-    }
+            );
+        }
 
-    // FIXME: FIX STOPS!!!!!!!!!!!!!!!!!!!!! Idk what to do
-    let stops: HashMap<u64, u32> = chart
-        .objects
-        .iter()
-        .filter(|object| object.channel == 9 && stop_ids.contains_key(&object.value))
-        .map(|object| {
-            (
-                object.tick,
-                (*stop_ids.get(&object.value).unwrap() * chart.resolution * 4) / 192,
-            )
-        })
-        .collect();
+        // FIXME: FIX STOPS!!!!!!!!!!!!!!!!!!!!! Idk what to do
+        let stops: HashMap<u32, u32> = chart
+            .objects
+            .iter()
+            .filter(|object| object.channel == 9 && stop_ids.contains_key(&object.value))
+            .map(|object| {
+                (
+                    object.tick,
+                    (*stop_ids.get(&object.value).unwrap() * chart.resolution * 4) / 192,
+                )
+            })
+            .collect();
 
-    let scroll_changes: HashMap<u64, f64> = chart
+        let scroll_changes: HashMap<u32, f64> = chart
         .objects
         .iter()
         .filter(|object| object.channel == 1020 /* SC in base 36 */ && scroll_ids.contains_key(&object.value))
         .map(|object| (object.tick, *scroll_ids.get(&object.value).unwrap()))
         .collect();
 
-    let timing = BmsTiming {
-        bpm_changes,
-        stops,
-        scroll_changes,
-    };
-    Some(timing)
+        let timing = BmsTiming {
+            bpm_changes,
+            stops,
+            scroll_changes,
+        };
+        Some(timing)
+    }
 }
