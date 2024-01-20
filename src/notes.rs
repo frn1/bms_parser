@@ -85,7 +85,7 @@ impl BmsNotes {
         let lnobj = u16::from_str_radix(lnobj_string, 36);
 
         let mut notes: Vec<BmsNote> = vec![];
-        for i in 0..objects.len() {
+        'mainloop: for i in 0..objects.len() {
             let object: &BmsObject = objects[i];
 
             let mut lane = 0;
@@ -104,7 +104,7 @@ impl BmsNotes {
                             if let Ok(lnobj_id) = lnobj {
                                 if object.value == lnobj_id
                                 {
-                                    continue;
+                                    continue 'mainloop;
                                 }
                             }
                             BmsNoteType::Normal {

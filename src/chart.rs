@@ -13,16 +13,24 @@ pub struct BmsObject {
 
 impl PartialEq for BmsObject {
     fn eq(&self, other: &Self) -> bool {
-        self.channel == other.channel && self.tick == other.tick
+        self.channel == other.channel
+            && self.tick == other.tick
     }
 }
 
 impl PartialOrd for BmsObject {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(
+        &self,
+        other: &Self,
+    ) -> Option<std::cmp::Ordering> {
         match self.tick.partial_cmp(&other.tick) {
             Some(core::cmp::Ordering::Equal) => {
-                if self.value == other.value && self.channel == other.channel {
-                    return Some(core::cmp::Ordering::Equal);
+                if self.value == other.value
+                    && self.channel == other.channel
+                {
+                    return Some(
+                        core::cmp::Ordering::Equal,
+                    );
                 } else {
                     return None;
                 }
@@ -56,8 +64,9 @@ impl BmsChart {
         // Sort them
         self.objects.sort();
         // Remove all duplicates except if they are in a BGM channel (01)
-        self.objects
-            .dedup_by(|a, b| a == b && a.channel != 1 && b.channel != 1);
+        self.objects.dedup_by(|a, b| {
+            a == b && a.channel != 1 && b.channel != 1
+        });
     }
 
     /// Compiles a ```BmsChart``` from a ```&str```.
@@ -80,19 +89,30 @@ impl BmsChart {
     ///     max
     /// }
     /// ```
-    pub fn compile(
+    pub fn compile<F>(
         data: &str,
         max_resolution: u32,
-        rng: fn(max_value: u32) -> u32,
-    ) -> Result<BmsChart, &str> {
-        let random_regex: Regex = Regex::new(r"^#RANDOM\s+(\d+)$").unwrap();
-        let endrandom_regex: Regex = Regex::new(r"^#ENDRANDOM$").unwrap();
-        let if_regex: Regex = Regex::new(r"^#IF\s+(\d+)$").unwrap();
-        let endif_regex: Regex = Regex::new(r"^#ENDIF$").unwrap();
-        let time_signature_regex: Regex = Regex::new(r"^#(\d\d\d)02:(\S*)$").unwrap();
-        let channel_regex: Regex =
-            Regex::new(r"^#(?:EXT\s+#)?(\d\d\d)(\S\S):([0-9a-zA-Z]*)$").unwrap();
-        let header_regex: Regex = Regex::new(r"^#(\w+)(?:\s+(\S.*))?$").unwrap();
+        mut rng: F,
+    ) -> Result<BmsChart, &str>
+    where
+        F: FnMut(u32) -> u32,
+    {
+        let random_regex: Regex =
+            Regex::new(r"^#RANDOM\s+(\d+)$").unwrap();
+        let endrandom_regex: Regex =
+            Regex::new(r"^#ENDRANDOM$").unwrap();
+        let if_regex: Regex =
+            Regex::new(r"^#IF\s+(\d+)$").unwrap();
+        let endif_regex: Regex =
+            Regex::new(r"^#ENDIF$").unwrap();
+        let time_signature_regex: Regex =
+            Regex::new(r"^#(\d\d\d)02:(\S*)$").unwrap();
+        let channel_regex: Regex = Regex::new(
+            r"^#(?:EXT\s+#)?(\d\d\d)(\S\S):([0-9a-zA-Z]*)$",
+        )
+        .unwrap();
+        let header_regex: Regex =
+            Regex::new(r"^#(\w+)(?:\s+(\S.*))?$").unwrap();
 
         let mut chart = BmsChart {
             resolution: 1,
@@ -110,18 +130,27 @@ impl BmsChart {
             fraction: f64,
         }
 
-        let mut time_signatures: HashMap<u32, f64> = HashMap::new();
-        let mut objects: Vec<(u16, BmsTime, u16)> = Vec::new();
+        let mut time_signatures: HashMap<u32, f64> =
+            HashMap::new();
+        let mut objects: Vec<(u16, BmsTime, u16)> =
+            Vec::new();
 
         for line in data.trim().lines() {
             // if line.starts_with('#') == false {
             //     continue;
             // }
             let mut matched_any = false;
-            if let Some(captures) = random_regex.captures(line) {
-                let max = match u32::from_str_radix(&captures[1], 10) {
+            if let Some(captures) =
+                random_regex.captures(line)
+            {
+                let max = match u32::from_str_radix(
+                    &captures[1],
+                    10,
+                ) {
                     Ok(v) => v,
-                    Err(_) => return Err("Couldn't parse max RANDOM value"),
+                    Err(_) => return Err(
+                        "Couldn't parse max RANDOM value",
+                    ),
                 };
                 let rng_value = rng(max);
                 rng_stack.push(rng_value);
@@ -129,14 +158,24 @@ impl BmsChart {
             } else if endrandom_regex.is_match(line) {
                 rng_stack.pop();
                 matched_any = true;
-            } else if let Some(captures) = if_regex.captures(line) {
-                let value = match u32::from_str_radix(&captures[1], 10) {
-                    Ok(v) => v,
-                    Err(_) => return Err("Couldn't parse max IF value"),
-                };
+            } else if let Some(captures) =
+                if_regex.captures(line)
+            {
+                let value =
+                    match u32::from_str_radix(
+                        &captures[1],
+                        10,
+                    ) {
+                        Ok(v) => v,
+                        Err(_) => return Err(
+                            "Couldn't parse max IF value",
+                        ),
+                    };
                 let rng_value = match rng_stack.last() {
                     Some(v) => *v,
-                    None => return Err("IF without a RANDOM value to use"),
+                    None => return Err(
+                        "IF without a RANDOM value to use",
+                    ),
                 };
                 skip_stack.push(rng_value != value);
                 matched_any = true;
@@ -145,10 +184,13 @@ impl BmsChart {
                 matched_any = true;
             }
 
-            let skipping = *skip_stack.last().unwrap_or(&false);
+            let skipping =
+                *skip_stack.last().unwrap_or(&false);
 
             if skipping == false && matched_any == false {
-                if let Some(captures) = time_signature_regex.captures(line) {
+                if let Some(captures) =
+                    time_signature_regex.captures(line)
+                {
                     let measure = match u32::from_str_radix(&captures[1], 10) {
                         Ok(v) => v,
                         Err(_) => return Err("Couldn't parse measure number in time signature"),
@@ -157,8 +199,11 @@ impl BmsChart {
                         Ok(v) => v,
                         Err(_) => return Err("Couldn't parse time signature value"),
                     };
-                    time_signatures.insert(measure, time_signature);
-                } else if let Some(captures) = channel_regex.captures(line) {
+                    time_signatures
+                        .insert(measure, time_signature);
+                } else if let Some(captures) =
+                    channel_regex.captures(line)
+                {
                     let measure = match u32::from_str_radix(&captures[1], 10) {
                         Ok(v) => v,
                         Err(_) => return Err("Couldn't parse measure number of objects"),
@@ -175,7 +220,8 @@ impl BmsChart {
                         .lcm((num_values as u32).borrow())
                         .min(max_resolution); // Update resolution to the best value
                     for i in 0..num_values {
-                        let text = &values_str[i * 2..=i * 2 + 1];
+                        let text =
+                            &values_str[i * 2..=i * 2 + 1];
                         let value = match u16::from_str_radix(text, {
                             // For some reason channel 03 uses base 16 for values
                             if channel == 3 {
@@ -188,36 +234,60 @@ impl BmsChart {
                             Err(_) => return Err("Couldn't parse object value"),
                         };
                         if value != 0 {
-                            let fraction = (1.0 / num_values as f64) * i as f64;
-                            let object = (channel, BmsTime { measure, fraction }, value);
+                            let fraction = (1.0
+                                / num_values as f64)
+                                * i as f64;
+                            let object = (
+                                channel,
+                                BmsTime {
+                                    measure,
+                                    fraction,
+                                },
+                                value,
+                            );
                             objects.push(object);
                         }
                     }
-                } else if let Some(captures) = header_regex.captures(line) {
+                } else if let Some(captures) =
+                    header_regex.captures(line)
+                {
                     let name = &captures[1];
                     let value = &captures[2];
-                    chart
-                        .headers
-                        .insert(UniCase::new(name.to_string()), value.to_string());
+                    chart.headers.insert(
+                        UniCase::new(name.to_string()),
+                        value.to_string(),
+                    );
                 }
             }
         }
 
         if objects.len() != 0 {
-            objects.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            objects.sort_by(|a, b| {
+                a.1.partial_cmp(&b.1).unwrap()
+            });
             objects.reverse();
             let end_bms_time = &objects.first().unwrap().1;
             let mut ticks: u32 = 0;
             for measure in 0..=end_bms_time.measure {
                 chart.barlines.push(ticks);
-                let quarter_notes_per_measure = time_signatures.get(&measure).unwrap_or(&1.0) * 4.0;
+                let quarter_notes_per_measure =
+                    time_signatures
+                        .get(&measure)
+                        .unwrap_or(&1.0)
+                        * 4.0;
                 let ticks_in_measure =
-                    (quarter_notes_per_measure * chart.resolution as f64).round() as u32;
+                    (quarter_notes_per_measure
+                        * chart.resolution as f64)
+                        .round() as u32;
                 while let Some(object) = objects.last() {
                     if object.1.measure != measure {
                         break;
                     }
-                    let tick = (object.1.fraction * ticks_in_measure as f64).round() as u32 + ticks;
+                    let tick = (object.1.fraction
+                        * ticks_in_measure as f64)
+                        .round()
+                        as u32
+                        + ticks;
                     chart.objects.push(BmsObject {
                         channel: object.0,
                         tick,
@@ -234,19 +304,26 @@ impl BmsChart {
         Ok(chart)
     }
 
-    pub fn extract_keysounds(&self) -> HashMap<u16, String> {
+    pub fn extract_keysounds(
+        &self,
+    ) -> HashMap<u16, String> {
         let mut keysounds = HashMap::new();
-        let keysound_regex = Regex::new(r"^wav(\S\S)$").unwrap();
+        let keysound_regex =
+            Regex::new(r"^wav(\S\S)$").unwrap();
         for key in self.headers.keys() {
             let lowercase_key = key.to_lowercase();
-            let captures = match keysound_regex.captures(&lowercase_key) {
+            let captures = match keysound_regex
+                .captures(&lowercase_key)
+            {
                 Some(v) => v,
                 None => continue,
             };
-            let id = match u16::from_str_radix(&captures[1], 36) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
+            let id =
+                match u16::from_str_radix(&captures[1], 36)
+                {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
             keysounds.insert(id, self.headers[key].clone());
         }
         keysounds
