@@ -2,25 +2,39 @@ use std::{
     cmp::Ordering, ops::RangeInclusive, time::Duration, vec,
 };
 
+use ordered_float::OrderedFloat;
 use unicase::UniCase;
 
 use crate::{
     chart::{BmsChart, BmsObject},
-    timing::BmsTiming,
+    timing::{
+        BmsTimeQuarterNotes, BmsTimeSeconds, BmsTiming,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BmsNoteType {
-    Normal { keysound: u16 },
-    Hidden { keysound: u16 },
-    Long { keysound: u16, end_time: u32 },
-    BGM { keysound: u16 },
-    Mine { damage: u16 },
+    Normal {
+        keysound: u16,
+    },
+    Hidden {
+        keysound: u16,
+    },
+    Long {
+        keysound: u16,
+        end_time: BmsTimeQuarterNotes,
+    },
+    BGM {
+        keysound: u16,
+    },
+    Mine {
+        damage: u16,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct BmsNote {
-    pub tick: u32,
+    pub time: BmsTimeQuarterNotes,
     pub lane: u16,
     pub note_type: BmsNoteType,
 }
@@ -28,8 +42,9 @@ pub struct BmsNote {
 #[derive(Debug, Clone)]
 pub struct BmsNotes {
     pub notes: Vec<BmsNote>,
-    pub hit_times:
-        Option<Vec<(Duration, Option<Duration>)>>,
+    pub hit_times: Option<
+        Vec<(BmsTimeSeconds, Option<BmsTimeSeconds>)>,
+    >,
 }
 
 impl BmsNotes {
@@ -41,7 +56,7 @@ impl BmsNotes {
         timing: &BmsTiming,
     ) -> BmsNotes {
         let mut notes = BmsNotes::generate(chart);
-        notes.find_seconds(chart, timing);
+        notes.find_seconds(timing);
         notes
     }
 
@@ -116,7 +131,8 @@ impl BmsNotes {
                         },
                         5 | 6 => BmsNoteType::Long {
                             keysound: object.value,
-                            end_time: 0,
+                            end_time:
+                                BmsTimeQuarterNotes::ZERO,
                         },
                         7 | 8 => BmsNoteType::Mine {
                             damage: object.value / 2, // BMS Command Memo says to do this but idk ¯\_(ツ)_/¯
@@ -133,15 +149,15 @@ impl BmsNotes {
             // it shouldn't be long as well
             match note_type {
                 BmsNoteType::Normal { keysound } => {
-                    if RANGES[0].contains(&object.channel) {
+                    if RANGES[1].contains(&object.channel) {
                         lane = object.channel
-                            - RANGES[0].start();
-                    } else if RANGES[1]
+                            - RANGES[1].start();
+                    } else if RANGES[2]
                         .contains(&object.channel)
                     {
                         lane = object.channel
-                            - RANGES[1].start()
-                            + RANGES[0].len() as u16;
+                            - RANGES[2].start()
+                            + RANGES[1].len() as u16;
                     }
                     if i < objects.len()
                         && lnobj.as_ref().is_ok()
@@ -150,80 +166,80 @@ impl BmsNotes {
                     {
                         let lnobj =
                             *lnobj.as_ref().unwrap();
-                        if let Some(next_idx) =
+                        if let Some(ln_end_idx) =
                             objects.iter().position(|e| {
                                 e.channel == object.channel
                                     && e.value == lnobj
-                                    && e.tick > object.tick
+                                    && e.time > object.time
                             })
                         {
                             note_type = BmsNoteType::Long {
                                 keysound,
-                                end_time: objects[next_idx]
-                                    .tick,
+                                end_time: objects[ln_end_idx]
+                                    .time,
                             };
                         }
                     }
                 }
                 BmsNoteType::Hidden { keysound: _ } => {
-                    if RANGES[2].contains(&object.channel) {
+                    if RANGES[3].contains(&object.channel) {
                         lane = object.channel
-                            - RANGES[2].start();
-                    } else if RANGES[3]
+                            - RANGES[3].start();
+                    } else if RANGES[4]
                         .contains(&object.channel)
                     {
                         lane = object.channel
-                            - RANGES[3].start()
-                            + RANGES[2].len() as u16;
+                            - RANGES[4].start()
+                            + RANGES[3].len() as u16;
                     }
                 }
                 BmsNoteType::Long {
                     keysound,
                     end_time: _,
                 } => {
-                    if RANGES[4].contains(&object.channel) {
+                    if RANGES[5].contains(&object.channel) {
                         lane = object.channel
-                            - RANGES[4].start();
-                    } else if RANGES[5]
+                            - RANGES[5].start();
+                    } else if RANGES[6]
                         .contains(&object.channel)
                     {
                         lane = object.channel
-                            - RANGES[5].start()
-                            + RANGES[4].len() as u16;
+                            - RANGES[6].start()
+                            + RANGES[5].len() as u16;
                     }
                     if let Some(next_idx) =
                         objects.iter().position(|e| {
                             e.channel == object.channel
                                 && e.value == object.value
-                                && e.tick > object.tick
+                                && e.time > object.time
                         })
                     {
                         let next = objects[next_idx];
                         note_type = BmsNoteType::Long {
                             keysound,
-                            end_time: next.tick,
+                            end_time: next.time,
                         };
                     } else {
                         continue;
                     }
                 }
                 BmsNoteType::Mine { damage: _ } => {
-                    if RANGES[6].contains(&object.channel) {
+                    if RANGES[7].contains(&object.channel) {
                         lane = object.channel
-                            - RANGES[6].start();
-                    } else if RANGES[7]
+                            - RANGES[7].start();
+                    } else if RANGES[8]
                         .contains(&object.channel)
                     {
                         lane = object.channel
-                            - RANGES[7].start()
-                            + RANGES[6].len() as u16;
+                            - RANGES[8].start()
+                            + RANGES[7].len() as u16;
                     }
                 }
                 _ => {}
             }
 
             notes.push(BmsNote {
-                tick: object.tick,
+                time: object.time,
                 lane,
                 note_type,
             });
@@ -236,27 +252,25 @@ impl BmsNotes {
     }
 
     /// Find seconds from for the notes in this ```BmsNotes``` with a ```BmsTiming``` and a ```BmsChart```
-    pub fn find_seconds(
-        &mut self,
-        chart: &BmsChart,
-        timing: &BmsTiming,
-    ) {
+    pub fn find_seconds(&mut self, timing: &BmsTiming) {
         if self.notes.is_empty() {
             return;
         }
 
         let mut hit_times =
-            vec![(Duration::ZERO, None); self.notes.len()];
+            vec![
+                (BmsTimeSeconds::ZERO, None);
+                self.notes.len()
+            ];
 
         let bpm_changes = &mut timing.bpm_changes.clone();
         let stops = &timing.stops;
 
-        let initial_bpm = bpm_changes.remove(&0).expect(
-            "Couldn't get BPM Change at tick 0 (???)",
-        );
-        let mut current_tick_duration =
-            Duration::new(60, 0).div_f64(initial_bpm)
-                / chart.resolution;
+        let initial_bpm = bpm_changes
+            .remove(&BmsTimeQuarterNotes::ZERO)
+            .expect(
+                "Couldn't get BPM Change at tick 0 (???)",
+            );
 
         // For safety, we make it **inmutable** so no changes get
         // made to the bpm_changes again after removing the one at 0
@@ -266,8 +280,8 @@ impl BmsNotes {
         enum EventType {
             PlayNote { index: usize },
             EndLongNote { index: usize },
-            ChangeBpm { new_duration: Duration },
-            Stop { ticks_stopped: u32 },
+            ChangeBpm { new_bpm: OrderedFloat<f64> },
+            Stop { time_stopped: BmsTimeQuarterNotes },
         }
 
         impl PartialOrd for EventType {
@@ -276,47 +290,47 @@ impl BmsNotes {
                 other: &Self,
             ) -> Option<Ordering> {
                 match self {
-                    Self::PlayNote { index: _ }
-                    | Self::EndLongNote { index: _ } => {
+                    Self::PlayNote { .. }
+                    | Self::EndLongNote { .. } => {
                         return match other {
-                            Self::PlayNote { index: _ }
+                            Self::PlayNote { .. }
                             | Self::EndLongNote {
-                                index: _,
+                                ..
                             } => Some(Ordering::Equal),
-                            Self::ChangeBpm {
-                                new_duration: _,
-                            } => Some(Ordering::Less),
-                            Self::Stop {
-                                ticks_stopped: _,
-                            } => Some(Ordering::Less),
+                            Self::ChangeBpm { .. } => {
+                                Some(Ordering::Less)
+                            }
+                            Self::Stop { .. } => {
+                                Some(Ordering::Less)
+                            }
                         }
                     }
-                    Self::ChangeBpm { new_duration: _ } => {
+                    Self::ChangeBpm { .. } => {
                         return match other {
-                            Self::PlayNote { index: _ }
+                            Self::PlayNote { .. }
                             | Self::EndLongNote {
-                                index: _,
+                                ..
                             } => Some(Ordering::Greater),
-                            Self::ChangeBpm {
-                                new_duration: _,
-                            } => Some(Ordering::Equal),
-                            Self::Stop {
-                                ticks_stopped: _,
-                            } => Some(Ordering::Less),
+                            Self::ChangeBpm { .. } => {
+                                Some(Ordering::Equal)
+                            }
+                            Self::Stop { .. } => {
+                                Some(Ordering::Less)
+                            }
                         }
                     }
-                    Self::Stop { ticks_stopped: _ } => {
+                    Self::Stop { .. } => {
                         return match other {
-                            Self::PlayNote { index: _ }
+                            Self::PlayNote { .. }
                             | Self::EndLongNote {
-                                index: _,
+                                ..
                             } => Some(Ordering::Greater),
-                            Self::ChangeBpm {
-                                new_duration: _,
-                            } => Some(Ordering::Greater),
-                            Self::Stop {
-                                ticks_stopped: _,
-                            } => Some(Ordering::Equal),
+                            Self::ChangeBpm { .. } => {
+                                Some(Ordering::Greater)
+                            }
+                            Self::Stop { .. } => {
+                                Some(Ordering::Equal)
+                            }
                         }
                     }
                 }
@@ -325,7 +339,7 @@ impl BmsNotes {
 
         #[derive(PartialEq, Eq, Ord)]
         struct Event {
-            tick: u32,
+            time: BmsTimeQuarterNotes,
             event_type: EventType,
         }
 
@@ -334,7 +348,7 @@ impl BmsNotes {
                 &self,
                 other: &Self,
             ) -> Option<Ordering> {
-                match self.tick.partial_cmp(&other.tick) {
+                match self.time.partial_cmp(&other.time) {
                     Some(Ordering::Equal) => {}
                     ord => return ord,
                 }
@@ -348,7 +362,7 @@ impl BmsNotes {
         for i in 0..self.notes.len() {
             let note = self.notes[i];
             events.push(Event {
-                tick: note.tick,
+                time: note.time,
                 event_type: EventType::PlayNote {
                     index: i,
                 },
@@ -359,7 +373,7 @@ impl BmsNotes {
             } = note.note_type
             {
                 events.push(Event {
-                    tick: end_time,
+                    time: end_time,
                     event_type: EventType::EndLongNote {
                         index: i,
                     },
@@ -367,73 +381,70 @@ impl BmsNotes {
             }
         }
 
-        for (tick, new_bpm) in bpm_changes {
+        for (time, &mut new_bpm) in bpm_changes {
             events.push(Event {
-                tick: *tick,
+                time: *time,
                 event_type: EventType::ChangeBpm {
-                    new_duration: Duration::new(60, 0)
-                        .div_f64(*new_bpm)
-                        / chart.resolution,
+                    new_bpm: OrderedFloat(new_bpm),
                 },
             })
         }
 
-        for (tick, ticks_stopped) in stops {
+        for (time, &time_stopped) in stops {
             events.push(Event {
-                tick: *tick,
+                time: *time,
                 event_type: EventType::Stop {
-                    ticks_stopped: *ticks_stopped,
+                    time_stopped,
                 },
             })
         }
 
         let mut events = events.iter();
 
-        let mut offset_ticks = 0;
-        let mut offset_time = Duration::ZERO;
+        let mut current_quarter_note_duration =
+            BmsTimeSeconds::new(60.0 / initial_bpm);
+        let mut offset_time_quarter_notes =
+            BmsTimeQuarterNotes::ZERO;
+        let mut offset_time_seconds = BmsTimeSeconds::ZERO;
 
         while let Some(event) = events.next() {
             match event.event_type {
                 EventType::PlayNote { index } => {
                     hit_times[index].0 =
-                        current_tick_duration
-                            * (event.tick - offset_ticks)
-                                as u32
-                            + offset_time;
+                        BmsTimeSeconds(current_quarter_note_duration.0
+                            * (event.time
+                                - offset_time_quarter_notes)
+                                .0)
+                            + offset_time_seconds;
                 }
                 EventType::EndLongNote { index } => {
                     hit_times[index].1 = Some(
-                        current_tick_duration
-                            * (event.tick - offset_ticks)
-                                as u32
-                            + offset_time,
+                        BmsTimeSeconds(current_quarter_note_duration.0
+                            * (event.time
+                                - offset_time_quarter_notes)
+                                .0)
+                            + offset_time_seconds,
                     );
                 }
-                EventType::ChangeBpm { new_duration } => {
-                    offset_time = current_tick_duration
-                        * (event.tick - offset_ticks)
-                            as u32;
-                    offset_ticks = event.tick;
-                    current_tick_duration = new_duration;
-                    println!(
-                        "New tick interval! {:#?}",
-                        new_duration
-                    );
+                EventType::ChangeBpm { new_bpm } => {
+                    offset_time_seconds = BmsTimeSeconds(current_quarter_note_duration.0
+                        * (event.time - offset_time_quarter_notes).0);
+                    offset_time_quarter_notes = event.time;
+                    current_quarter_note_duration =
+                        BmsTimeSeconds::new(
+                            60.0 / new_bpm.0,
+                        );
                 }
-                EventType::Stop { ticks_stopped } => {
-                    let event_time = current_tick_duration
-                        * (event.tick - offset_ticks)
-                            as u32;
-                    let stop_duration =
-                        current_tick_duration
-                            * ticks_stopped;
-                    offset_time =
+                EventType::Stop { time_stopped } => {
+                    let event_time = BmsTimeSeconds(current_quarter_note_duration.0
+                        * (event.time - offset_time_quarter_notes).0);
+                    let stop_duration = BmsTimeSeconds(
+                        current_quarter_note_duration.0
+                            * time_stopped.0,
+                    );
+                    offset_time_seconds =
                         event_time + stop_duration;
-                    offset_ticks = event.tick;
-                    println!(
-                        "Stop for {:#?}! ({} ticks)",
-                        stop_duration, ticks_stopped
-                    );
+                    offset_time_quarter_notes = event.time;
                 }
             }
         }

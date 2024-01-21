@@ -1,20 +1,22 @@
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
-use num::Integer;
+use ordered_float::OrderedFloat;
 use regex::Regex;
 use unicase::UniCase;
+
+use crate::timing::BmsTimeQuarterNotes;
 
 #[derive(Eq, Hash, Debug, Clone, Copy, Ord)]
 pub struct BmsObject {
     pub channel: u16,
-    pub tick: u32,
+    pub time: BmsTimeQuarterNotes,
     pub value: u16,
 }
 
 impl PartialEq for BmsObject {
     fn eq(&self, other: &Self) -> bool {
         self.channel == other.channel
-            && self.tick == other.tick
+            && self.time == other.time
     }
 }
 
@@ -23,7 +25,7 @@ impl PartialOrd for BmsObject {
         &self,
         other: &Self,
     ) -> Option<std::cmp::Ordering> {
-        match self.tick.partial_cmp(&other.tick) {
+        match self.time.partial_cmp(&other.time) {
             Some(core::cmp::Ordering::Equal) => {
                 if self.value == other.value
                     && self.channel == other.channel
@@ -42,10 +44,9 @@ impl PartialOrd for BmsObject {
 
 #[derive(Debug)]
 pub struct BmsChart {
-    pub resolution: u32, // Ticks per quarter note
     pub headers: HashMap<UniCase<String>, String>,
     pub objects: Vec<BmsObject>,
-    pub barlines: Vec<u32>,
+    pub barlines: Vec<f64>,
 }
 
 // TODO: Clean up
@@ -74,13 +75,6 @@ impl BmsChart {
     /// The **inclusive** range of values returned by the rng function
     /// should be between 1 and ```max_value``` (AKA ```1..=max_value```)
     ///
-    /// ```max_resolution``` is the maximum resolution the chart will use.
-    ///
-    /// I recommend for this to be kept between 240 and 960, but feel
-    /// free to set this to u32::MAX if you really need it. This exists
-    /// because some charts (Like Random from BOFXVII) have a really
-    /// high resolution and there is basically no difference in making this higher.
-    ///
     /// If you can't use a random number generator for whatever reason,
     /// then a simple function like this would work as a placeholder:
     ///
@@ -91,7 +85,6 @@ impl BmsChart {
     /// ```
     pub fn compile<F>(
         data: &str,
-        max_resolution: u32,
         mut rng: F,
     ) -> Result<BmsChart, &str>
     where
@@ -115,7 +108,6 @@ impl BmsChart {
             Regex::new(r"^#(\w+)(?:\s+(\S.*))?$").unwrap();
 
         let mut chart = BmsChart {
-            resolution: 1,
             headers: HashMap::new(),
             objects: vec![],
             barlines: vec![],
@@ -125,14 +117,14 @@ impl BmsChart {
         let mut skip_stack = vec![];
 
         #[derive(PartialEq, PartialOrd)]
-        struct BmsTime {
+        struct RawBmsTime {
             measure: u32,
             fraction: f64,
         }
 
         let mut time_signatures: HashMap<u32, f64> =
             HashMap::new();
-        let mut objects: Vec<(u16, BmsTime, u16)> =
+        let mut objects: Vec<(u16, RawBmsTime, u16)> =
             Vec::new();
 
         for line in data.trim().lines() {
@@ -215,10 +207,6 @@ impl BmsChart {
                     let values_str = &captures[3];
                     // Values come in pairs so we divide by 2 to get the divisions in the measure
                     let num_values = values_str.len() / 2;
-                    chart.resolution = chart
-                        .resolution
-                        .lcm((num_values as u32).borrow())
-                        .min(max_resolution); // Update resolution to the best value
                     for i in 0..num_values {
                         let text =
                             &values_str[i * 2..=i * 2 + 1];
@@ -239,7 +227,7 @@ impl BmsChart {
                                 * i as f64;
                             let object = (
                                 channel,
-                                BmsTime {
+                                RawBmsTime {
                                     measure,
                                     fraction,
                                 },
@@ -267,36 +255,33 @@ impl BmsChart {
             });
             objects.reverse();
             let end_bms_time = &objects.first().unwrap().1;
-            let mut ticks: u32 = 0;
+            let mut quarter_notes = 0.0;
             for measure in 0..=end_bms_time.measure {
-                chart.barlines.push(ticks);
+                chart.barlines.push(quarter_notes);
                 let quarter_notes_per_measure =
                     time_signatures
                         .get(&measure)
                         .unwrap_or(&1.0)
                         * 4.0;
-                let ticks_in_measure =
-                    (quarter_notes_per_measure
-                        * chart.resolution as f64)
-                        .round() as u32;
                 while let Some(object) = objects.last() {
                     if object.1.measure != measure {
                         break;
                     }
-                    let tick = (object.1.fraction
-                        * ticks_in_measure as f64)
-                        .round()
-                        as u32
-                        + ticks;
+                    let time = BmsTimeQuarterNotes(
+                        ordered_float::OrderedFloat(
+                            object.1.fraction
+                                * quarter_notes_per_measure + quarter_notes,
+                        ),
+                    );
                     chart.objects.push(BmsObject {
                         channel: object.0,
-                        tick,
+                        time,
                         value: object.2,
                     });
                     objects.pop();
                 }
 
-                ticks += ticks_in_measure;
+                quarter_notes += quarter_notes_per_measure;
             }
         }
 
